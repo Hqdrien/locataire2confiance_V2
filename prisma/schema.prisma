@@ -1,0 +1,224 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  TENANT
+  LANDLORD
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+}
+
+model User {
+  id               String             @id @default(uuid())
+  email            String             @unique
+  passwordHash     String
+  role             UserRole
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  subscriptionStatus SubscriptionStatus @default(INACTIVE)
+  isBanned         Boolean            @default(false)
+  stripeCustomerId String?
+
+  tenantProfile    TenantProfile?
+  listings         Listing[]
+  messages         Message[]
+  passwordResetTokens PasswordResetToken[]
+  activityLogs     ActivityLog[]
+
+  @@map("users")
+}
+
+enum Situation {
+  CDI
+  CDD
+  STUDENT
+  FREELANCE
+  RETIRED
+  UNEMPLOYED
+}
+
+enum GuarantorType {
+  NONE
+  PHYSICAL
+  VISALE
+  OTHER
+}
+
+model TenantProfile {
+  id                    String        @id @default(uuid())
+  userId                String        @unique
+  user                  User          @relation(fields: [userId], references: [id])
+  firstName             String
+  lastName              String
+  phone                 String?
+  situation             Situation
+  monthlyIncome         Int
+  guarantorType         GuarantorType
+  isDossierFacileCertified Boolean    @default(false)
+  dossierFacileUrl      String?
+  profileCompletionScore Int          @default(0)
+
+  documents             Document[]
+  matches               Match[]
+  shareLinks            DossierShareLink[]
+  searchAlerts          TenantSearchAlert[]
+
+  @@map("tenant_profiles")
+}
+
+enum DocumentType {
+  ID_CARD
+  PAYSLIP
+  TAX_NOTICE
+  GUARANTOR_DOC
+  OTHER
+}
+
+enum DocumentStatus {
+  UPLOADED
+  VERIFIED_DOSSIER_FACILE
+  PENDING
+  VALIDATED
+  REJECTED
+}
+
+model Document {
+  id              String         @id @default(uuid())
+  tenantProfileId String
+  tenantProfile   TenantProfile  @relation(fields: [tenantProfileId], references: [id])
+  type            DocumentType
+  storageKey      String
+  status          DocumentStatus @default(UPLOADED)
+  uploadedAt      DateTime       @default(now())
+
+  @@map("documents")
+}
+
+
+enum ListingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Listing {
+  id          String        @id @default(uuid())
+  landlordId  String
+  landlord    User          @relation(fields: [landlordId], references: [id])
+  title       String
+  description String
+  address     String?
+  city        String
+  zipCode     String
+  rentAmount  Int
+  surface     Int
+  rooms       Int
+  photos      String[]
+  status      ListingStatus @default(DRAFT)
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  matches     Match[]
+
+  @@map("listings")
+}
+
+enum MatchStatus {
+  NEW
+  VIEWED
+  CONTACTED
+  REJECTED
+}
+
+
+model Message {
+  id        String   @id @default(uuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id])
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("messages")
+}
+
+model Match {
+  id        String      @id @default(uuid())
+  listingId String
+  listing   Listing     @relation(fields: [listingId], references: [id])
+  tenantId  String
+  tenantProfile TenantProfile @relation(fields: [tenantId], references: [id])
+  score     Int
+  status    MatchStatus @default(NEW)
+  createdAt DateTime    @default(now())
+  
+  messages  Message[]
+
+  @@map("matches")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}
+
+model DossierShareLink {
+  id              String        @id @default(uuid())
+  token           String        @unique
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id])
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  viewedAt        DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@map("dossier_share_links")
+}
+
+model TenantSearchAlert {
+  id              String        @id @default(uuid())
+  tenantProfileId String
+  tenantProfile   TenantProfile @relation(fields: [tenantProfileId], references: [id])
+  city            String
+  maxRent         Int?
+  minSurface      Int?
+  minRooms        Int?
+  emailEnabled    Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("tenant_search_alerts")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  createdAt DateTime @default(now())
+
+  @@map("activity_logs")
+}
